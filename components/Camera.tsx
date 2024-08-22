@@ -5,9 +5,9 @@ import { useEffect, useRef, useState } from "react";
 export default function Camera() {
   const [capturedImage, setCapturedImage] = useState<string>("");
   const [deviceList, setDeviceList] = useState<MediaDeviceInfo[]>([]);
-  const [selectedDevice, setSelectedDevice] = useState<MediaDeviceInfo>();
 
   const videoRef = useRef<HTMLVideoElement>(null);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   function createVideoConstraints(deviceId: string) {
@@ -27,6 +27,11 @@ export default function Camera() {
     const newMediaStream = await navigator.mediaDevices.getUserMedia(videoContraints);
     if (videoRef.current) {
       videoRef.current.srcObject = newMediaStream;
+      videoRef.current.style.display = "block";
+    }
+
+    if (canvasRef.current) {
+      canvasRef.current.style.display = "none";
     }
   }
 
@@ -41,7 +46,7 @@ export default function Camera() {
     return videoDevices;
   }
 
-  const handleCapture = async () => {
+  const handleCapturePhoto = async () => {
     if (!canvasRef.current || !videoRef.current) {
       console.error("canvas or video is not ready");
       return;
@@ -52,11 +57,29 @@ export default function Camera() {
 
     canvasRef.current.getContext("2d")?.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
     setCapturedImage(canvasRef.current.toDataURL("image/jpeg"));
+
+    if (videoRef.current) {
+      videoRef.current.style.display = "none";
+    }
+
+    if (canvasRef.current) {
+      canvasRef.current.style.display = "block";
+    }
+  }
+
+  const handleRetakePhoto = () => {
+    setCapturedImage("");
+    if (videoRef.current) {
+      videoRef.current.style.display = "block";
+    }
+
+    if (canvasRef.current) {
+      canvasRef.current.style.display = "none";
+    }
   }
 
   async function changeCamera(device: MediaDeviceInfo) {
     const videoContraints = createVideoConstraints(device.deviceId);
-    setSelectedDevice(device);
     await setCamera(videoContraints);
   }
 
@@ -69,7 +92,6 @@ export default function Camera() {
         // get Divice
         const deviceList = await getDevices();
         setDeviceList(deviceList);
-        setSelectedDevice(deviceList[0]);
 
         // set video constraints
         const videoContraints = createVideoConstraints(deviceList[0].deviceId);
@@ -91,16 +113,16 @@ export default function Camera() {
     <div>
       <div style={{ display: 'flex', gap: '2rem' }}>
         <div>
-          <h3>Camera</h3>
-          <video id="video" ref={videoRef} playsInline autoPlay></video>
-        </div>
-        <div>
-          <h3>Canvas</h3>
-          <canvas id="canvas" ref={canvasRef}></canvas>
+          <h3>{capturedImage ? "사진" : "카메라"}</h3>
+          <video id="video" ref={videoRef} playsInline autoPlay />
+          <canvas id="canvas" ref={canvasRef} />
         </div>
       </div>
-      <div>
-        <button onClick={handleCapture}>Capture</button>
+      <div style={{ marginTop: "1rem" }}>
+        {capturedImage
+          ? <button onClick={handleRetakePhoto}>재촬영</button>
+          : <button onClick={handleCapturePhoto}>사진찍기</button>
+        }
       </div>
       <div>
         <h3>Device List</h3>
