@@ -1,9 +1,10 @@
-import NewCamera from "@/components/NewCamera";
+import Camera from "@/components/Camera";
+
 
 export default function Home() {
   return (
     <div>
-      <NewCamera />
+      <Camera />
     </div>
   )
 }

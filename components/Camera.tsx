@@ -1,14 +1,30 @@
-"use client"
+'use client'
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from 'react'
 
-export default function Camera() {
-  const [capturedImage, setCapturedImage] = useState<string>("");
-  const [deviceList, setDeviceList] = useState<MediaDeviceInfo[]>([]);
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
+import Image from 'next/image'
 
-  const videoRef = useRef<HTMLVideoElement>(null);
+import CHANGE from '@/images/camera-change.svg'
+import CAPTURE from '@/images/capture.png'
+import GALLERY from '@/images/gallery.svg'
 
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+export default function Camera({ initOpen = false }: { initOpen?: boolean }) {
+  const [capturedImage, setCapturedImage] = useState<string>('')
+  const [open, setOpen] = useState(initOpen)
+  const [selectedDeviceIndex, setSelectedDeviceIndex] = useState<number>(0)
+  const [deviceList, setDeviceList] = useState<MediaDeviceInfo[]>([])
+
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   function createVideoConstraints(deviceId: string) {
     const videoContraints = {
@@ -17,124 +33,255 @@ export default function Camera() {
           exact: deviceId,
         },
       },
-      audio: false
+      audio: false,
     }
 
-    return videoContraints;
+    return videoContraints
   }
 
   async function setCamera(videoContraints: MediaStreamConstraints) {
-    const newMediaStream = await navigator.mediaDevices.getUserMedia(videoContraints);
+    const newMediaStream =
+      await navigator.mediaDevices.getUserMedia(videoContraints)
+    setCapturedImage('')
     if (videoRef.current) {
-      videoRef.current.srcObject = newMediaStream;
-      videoRef.current.style.display = "block";
-    }
-
-    if (canvasRef.current) {
-      canvasRef.current.style.display = "none";
+      videoRef.current.srcObject = newMediaStream
     }
   }
 
   async function getDevices() {
     if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
-      throw new Error("enumerated devices not supported");
+      throw new Error('enumerated devices not supported')
     }
 
-    let allDevices = await navigator.mediaDevices.enumerateDevices();
-    const videoDevices = allDevices.filter((device) => device.kind === "videoinput");
+    const allDevices = await navigator.mediaDevices.enumerateDevices()
+    const videoDevices = allDevices.filter(
+      (device) => device.kind === 'videoinput',
+    )
 
-    return videoDevices;
+    return videoDevices
   }
 
-  const handleCapturePhoto = async () => {
+  const handleCapturePhoto = () => {
     if (!canvasRef.current || !videoRef.current) {
-      console.error("canvas or video is not ready");
-      return;
+      return
     }
 
-    canvasRef.current.width = videoRef.current.videoWidth;
-    canvasRef.current.height = videoRef.current.videoHeight;
+    canvasRef.current.width = videoRef.current.offsetWidth
+    canvasRef.current.height = videoRef.current.offsetHeight
 
-    canvasRef.current.getContext("2d")?.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-    setCapturedImage(canvasRef.current.toDataURL("image/jpeg"));
-
-    if (videoRef.current) {
-      videoRef.current.style.display = "none";
-    }
-
-    if (canvasRef.current) {
-      canvasRef.current.style.display = "block";
-    }
+    canvasRef.current
+      .getContext('2d')
+      ?.drawImage(
+        videoRef.current,
+        0,
+        0,
+        canvasRef.current.width,
+        canvasRef.current.height,
+      )
+    setCapturedImage(canvasRef.current.toDataURL('image/jpeg'))
   }
 
-  const handleRetakePhoto = () => {
-    setCapturedImage("");
-    if (videoRef.current) {
-      videoRef.current.style.display = "block";
-    }
-
-    if (canvasRef.current) {
-      canvasRef.current.style.display = "none";
-    }
+  function updateSelectedDeviceIndex() {
+    const newIndex = (selectedDeviceIndex + 1) % deviceList.length
+    setSelectedDeviceIndex(newIndex)
+    return newIndex
   }
 
-  async function changeCamera(device: MediaDeviceInfo) {
-    const videoContraints = createVideoConstraints(device.deviceId);
-    await setCamera(videoContraints);
+  async function handleChangeCamera() {
+    const newIndex = updateSelectedDeviceIndex()
+    const videoContraints = createVideoConstraints(
+      deviceList[newIndex].deviceId,
+    )
+    await setCamera(videoContraints)
   }
 
-  useEffect(() => {
-    const showCamera = async () => {
-      try {
-        // request video permission
-        await navigator.mediaDevices.getUserMedia({ video: true });
+  const handleShowCamera = useCallback(async () => {
+    try {
+      // request video permission
+      await navigator.mediaDevices.getUserMedia({ video: true })
 
-        // get Divice
-        const deviceList = await getDevices();
-        setDeviceList(deviceList);
+      // get Divice
+      const deviceList = await getDevices()
+      setDeviceList(deviceList)
 
-        // set video constraints
-        const videoContraints = createVideoConstraints(deviceList[0].deviceId);
+      // set video constraints
+      const videoContraints = createVideoConstraints(
+        deviceList[selectedDeviceIndex].deviceId,
+      )
 
-        //set camera by video constraints
-        await setCamera(videoContraints);
+      // set camera by video constraints
+      await setCamera(videoContraints)
+    } catch (e) {
+      // console.error(e);
+    }
+  }, [selectedDeviceIndex])
 
-      } catch (e) {
-        console.error(e);
+  const handleGalleryImage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.item(0)
+
+    if (!file || !file.type.startsWith('image/')) {
+      alert('이미지 파일을 선택해주세요.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = (event) => {
+      const dataURL = event.target?.result as string
+
+      // Create an Image object
+      let image = new (window as any).Image() as HTMLImageElement
+      image.src = dataURL
+
+      image.onload = () => {
+        const canvas = canvasRef.current
+        if (canvas) {
+          const context = canvas.getContext('2d')
+          if (context) {
+            // Get canvas and image dimensions
+            const canvasWidth = canvas.width
+            const canvasHeight = canvas.height
+            const imageWidth = image.width
+            const imageHeight = image.height
+
+            // Calculate aspect ratios
+            const canvasAspect = canvasWidth / canvasHeight
+            const imageAspect = imageWidth / imageHeight
+
+            let drawWidth, drawHeight, xOffset, yOffset
+
+            // Determine the size and position to maintain aspect ratio
+            if (imageAspect > canvasAspect) {
+              // Image is wider than canvas
+              drawWidth = canvasWidth
+              drawHeight = canvasWidth / imageAspect
+              xOffset = 0
+              yOffset = (canvasHeight - drawHeight) / 2
+            } else {
+              // Image is taller than canvas or perfectly matches
+              drawHeight = canvasHeight
+              drawWidth = canvasHeight * imageAspect
+              xOffset = (canvasWidth - drawWidth) / 2
+              yOffset = 0
+            }
+
+            // Clear the canvas before drawing
+            context.clearRect(0, 0, canvasWidth, canvasHeight)
+
+            // Draw the image on the canvas
+            context.drawImage(image, xOffset, yOffset, drawWidth, drawHeight)
+
+            setCapturedImage(canvasRef.current.toDataURL('image/jpeg'))
+          }
+        }
       }
     }
 
+    reader.readAsDataURL(file)
+  }
+
+  const handleRetakePhoto = () => {
+    setCapturedImage('')
+  }
+
+  const handleSubmit = async () => {
+    setOpen(false)
+
+    // TODO Something for your business logic
+  }
+
+  useEffect(() => {
     (async () => {
-      await showCamera();
-    })();
-  }, []);
+      await handleShowCamera()
+    })()
+  }, [handleShowCamera])
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: '2rem' }}>
-        <div>
-          <h3>{capturedImage ? "사진" : "카메라"}</h3>
-          <video id="video" ref={videoRef} playsInline autoPlay />
-          <canvas id="canvas" ref={canvasRef} />
-        </div>
-      </div>
-      <div style={{ marginTop: "1rem" }}>
-        {capturedImage
-          ? <button onClick={handleRetakePhoto}>재촬영</button>
-          : <button onClick={handleCapturePhoto}>사진찍기</button>
-        }
-      </div>
-      <div>
-        <h3>Device List</h3>
-        <ul>
-          {deviceList.map((device, index) => (
-            <div key={index} style={{ display: 'flex', gap: '1rem' }}>
-              <li>{device.label}</li>
-              <button onClick={() => changeCamera(device)}>변경</button>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger asChild>
+          <Button
+            variant="outline"
+            type="button"
+            className="w-full"
+            onClick={handleShowCamera}
+          >
+            카메라 촬영하기
+          </Button>
+        </DialogTrigger>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>카메라</DialogTitle>
+            <DialogDescription>
+              사진을 찍으세요!!
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <div>
+              {/* Camera or Captured Image */}
+              <video
+                width={462}
+                height={346}
+                id="video"
+                ref={videoRef}
+                hidden={capturedImage !== ''}
+                playsInline
+                autoPlay
+              />
+              <canvas
+                width={462}
+                height={346}
+                id="canvas"
+                ref={canvasRef}
+                hidden={capturedImage === ''}
+              />
             </div>
-          ))}
-        </ul>
-      </div>
+            {!capturedImage ? (
+              <div className="flex justify-between mt-[24px]">
+                {/* Gallery */}
+                <div>
+                  <input
+                    type="file"
+                    hidden
+                    id="galleryImage"
+                    accept="image/*"
+                    onChange={(e) => handleGalleryImage(e)}
+                  />
+                  <label htmlFor="galleryImage">
+                    <Image
+                      className="w-[44px] h-[44px] cursor-pointer"
+                      src={GALLERY}
+                      alt="gallery image"
+                    />
+                  </label>
+                </div>
+                {/* Capture */}
+                <Image
+                  width={44}
+                  height={44}
+                  className="w-[44px] h-[44px] cursor-pointer"
+                  src={CAPTURE}
+                  alt="capture image"
+                  onClick={handleCapturePhoto}
+                />
+                {/* Change Camera */}
+                <Image
+                  width={44}
+                  height={44}
+                  className="w-[44px] h-[44px] cursor-pointer"
+                  src={CHANGE}
+                  alt="change camera image"
+                  onClick={handleChangeCamera}
+                />
+              </div>
+            ) : (
+              <div className="flex justify-between mt-[24px]">
+                <Button onClick={handleRetakePhoto}>재촬영</Button>
+                <Button onClick={handleSubmit}>확인</Button>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
